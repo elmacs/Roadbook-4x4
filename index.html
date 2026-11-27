@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1311">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Roadbook 4x4</title>
+<style>
+/*
+VOICE: strumento di bordo, essenziale, leggibile a colpo d'occhio con le buche
+IDEA: un trip master da rally affiancato al rullo del roadbook cartaceo
+PICTURE: il contachilometri gigante e la nota corrente ritagliata dal foglio
+COLOUR/TYPE: notte verde-nero con giallo-lime di sicurezza; giorno bianco/nero ad alto contrasto; Roboto Condensed tabellare
+LAYOUT: verticale = cruscotto, rullo, comandi; orizzontale = cruscotto+comandi a sinistra, rullo a destra
+*/
+:root{--bg:#0e1311;--panel:#18201c;--line:#2b3630;--ink:#eef2ec;--dim:#93a198;--acc:#d4ff3a;--accInk:#0e1311;--warn:#ffb020;--bad:#ff5a47;--ok:#3ddc84;--cur:#22301f}
+:root[data-theme=day]{--bg:#ffffff;--panel:#eceeea;--line:#c3cbc5;--ink:#060807;--dim:#465249;--acc:#1d5c00;--accInk:#fff;--warn:#9a5200;--bad:#c4160a;--ok:#0b7a3b;--cur:#e3f3c9}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 "Roboto Condensed","sans-serif-condensed",system-ui,sans-serif;overflow:hidden;font-variant-numeric:tabular-nums}
+.view{position:fixed;inset:0;display:none;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.view.on{display:flex}
+button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;min-height:48px;min-width:48px;padding:0 14px;cursor:pointer;touch-action:manipulation;user-select:none}
+button:active{transform:scale(.96)}
+button.pri{background:var(--acc);color:var(--accInk);border-color:var(--acc);font-weight:700}
+button.bad{color:var(--bad)}
+button:disabled{opacity:.4}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;width:100%}
+label{display:block;font-size:14px;color:var(--dim)}
+.bar{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid var(--line)}
+.bar .t{flex:1;font-weight:700;font-size:18px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.scrollv{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+/* NAV */
+.gps{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--dim);white-space:nowrap}
+.gps i{width:12px;height:12px;border-radius:50%;background:var(--dim)}
+.gps.ok i{background:var(--ok)}.gps.mid i{background:var(--warn)}.gps.bad i{background:var(--bad)}
+.dash{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 10px}
+.odo{font-size:clamp(64px,22vw,120px);font-weight:700;line-height:.95;letter-spacing:-2px;cursor:pointer;white-space:nowrap}
+.odo small{font-size:18px;letter-spacing:0;color:var(--dim);font-weight:400;margin-left:4px}
+.odo.rev{color:var(--warn)}
+.side{display:grid;gap:6px;align-content:start;text-align:right}
+.side b{font-size:28px;line-height:1}.side span{font-size:13px;color:var(--dim)}
+.mini{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mini div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 10px}
+.mini span{font-size:13px;color:var(--dim);display:block}
+.mini b{font-size:34px;line-height:1.05;white-space:nowrap}
+#nxtBox.near{background:var(--acc);color:var(--accInk);border-color:var(--acc)}
+#nxtBox.near span{color:inherit}
+#nxtBox.over{border-color:var(--bad);color:var(--bad)}
+.list{position:relative;flex:1;overflow-y:auto;margin:0;padding:0 8px 8px;list-style:none;-webkit-overflow-scrolling:touch}
+.list li{background:var(--panel);border:2px solid var(--line);border-radius:12px;margin-top:8px;overflow:hidden}
+.list li.done{opacity:.45}
+.list li.cur{border-color:var(--acc);background:var(--cur)}
+.list li.cur .nh b{background:var(--acc);color:var(--accInk)}
+.nh{display:flex;gap:10px;align-items:center;padding:6px 10px;font-size:18px}
+.nh b{min-width:40px;text-align:center;border-radius:6px;background:var(--line);padding:0 6px}
+.nh .km{font-weight:700}
+.nh .rem{margin-left:auto;font-weight:700;white-space:nowrap}
+.nh .dg{color:var(--bad);font-weight:900;letter-spacing:1px}
+.list img{display:block;width:100%;background:#fff}
+.list p{margin:0;padding:6px 10px 10px;font-size:18px}
+.empty{padding:24px 16px;text-align:center;color:var(--dim)}
+.empty button{margin-top:12px}
+.ctl{display:grid;grid-template-columns:1fr 1.2fr 2fr 1.2fr 1fr;gap:6px;padding:8px;border-top:1px solid var(--line)}
+.ctl button{min-height:64px;font-size:26px;font-weight:700;padding:0}
+.ctl .pri{font-size:22px}
+/* landscape */
+@media (orientation:landscape) and (min-width:640px){
+ #v-nav.on{display:grid;grid-template-columns:minmax(0,40%) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto}
+ #v-nav .bar{grid-column:1/-1}
+ #v-nav .dash{grid-column:1;grid-row:2;align-content:start}
+ #v-nav .list{grid-column:2;grid-row:2/4}
+ #v-nav .ctl{grid-column:1;grid-row:3;border-top:0}
+ .odo{font-size:clamp(56px,11vw,110px)}
+}
+/* EDITOR / BOOKS */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>*{flex:0 0 auto}
+.pgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pg{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;display:grid;gap:6px}
+.pg img{width:100%;height:150px;object-fit:contain;background:#fff;border-radius:6px}
+.pg .st{font-size:13px;color:var(--dim)}.pg .st.err{color:var(--bad)}.pg .st.ok{color:var(--ok)}
+.pg .row button{flex:1;min-height:40px;padding:0 6px;font-size:14px}
+.ne{display:grid;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;margin-bottom:8px}
+.ne img{width:100%;background:#fff;border-radius:6px}
+.ng{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.ng input,.ng select{padding:8px 6px}
+.na{display:flex;gap:6px}.na button{flex:1;min-height:40px}
+h2{font-size:18px;margin:16px 0 8px}
+.hint{font-size:14px;color:var(--dim);margin:4px 0 8px}
+.bk{display:flex;gap:8px;align-items:center}.bk .t{flex:1}
+.bk small{display:block;color:var(--dim)}
+/* MAP */
+#mapEl{flex:1;background:#ddd}
+.mk{font-weight:700;font-size:13px}
+.ftr{display:flex;gap:6px;padding:8px;flex-wrap:wrap;border-top:1px solid var(--line)}
+.ftr button{flex:1}
+/* dialogs & toast */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:16px;width:min(420px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+dialog h3{margin:0 0 10px;font-size:20px}
+.dlgb{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+#menu .mg{display:grid;gap:8px}
+#menu .mg button{text-align:left}
+#toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,40px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:10px;display:flex;gap:10px;align-items:center;max-width:92vw;transition:.2s;z-index:9}
+#toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#toast button{min-height:36px;background:var(--bg);color:var(--ink)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<!-- NAVIGAZIONE -->
+<section id="v-nav" class="view on">
+ <header class="bar">
+  <button id="bMenu" aria-label="Menu">☰</button>
+  <div class="t" id="bkName">Roadbook</div>
+  <div class="gps" id="gps"><i></i><span id="gpsT">GPS off</span></div>
+  <button id="bMap">Mappa</button>
+ </header>
+ <div class="dash">
+  <div class="odo" id="odo" title="Tocca per impostare">0.00<small>km</small></div>
+  <div class="side">
+   <button id="bRun" class="pri">▶ Avvia</button>
+   <div><b id="spd">—</b> <span>km/h</span></div>
+   <div><b id="cap">—</b> <span>CAP</span></div>
+  </div>
+  <div class="mini">
+   <div><span>Dalla nota precedente</span><b id="par">—</b></div>
+   <div id="nxtBox"><span>Alla prossima nota</span><b id="nxt">—</b></div>
+  </div>
+ </div>
+ <ol class="list" id="list"></ol>
+ <footer class="ctl">
+  <button id="bMinus" aria-label="Trip meno 10 metri">−</button>
+  <button id="bPrev" aria-label="Nota precedente">◀</button>
+  <button id="bOk" class="pri">✓ OK</button>
+  <button id="bNext" aria-label="Nota successiva">▶</button>
+  <button id="bPlus" aria-label="Trip più 10 metri">+</button>
+ </footer>
+</section>
+
+<!-- ELENCO ROADBOOK -->
+<section id="v-books" class="view">
+ <header class="bar"><button data-go="nav">◀</button><div class="t">Roadbook</div><button class="pri" id="bNewBook">+ Nuovo</button></header>
+ <div class="scrollv" id="books"></div>
+</section>
+
+<!-- EDITOR -->
+<section id="v-edit" class="view">
+ <header class="bar"><button id="edBack">◀</button><div class="t">Modifica roadbook</div><button class="pri" id="edUse">Usa</button></header>
+ <div class="scrollv">
+  <label>Nome<input id="edName"></label>
+  <h2>Pagine</h2>
+  <div class="row">
+   <div style="flex:1"><input id="edCam" type="file" accept="image/*" capture="environment" hidden><button class="pri" type="button" style="width:100%" onclick="this.previousElementSibling.click()">Scatta foto</button></div>
+   <div style="flex:1"><input id="edFile" type="file" accept="image/*,application/pdf" multiple hidden><button type="button" style="width:100%" onclick="this.previousElementSibling.click()">Carica immagini/PDF</button></div>
+  </div>
+  <p class="hint">Fotografa ogni foglio dall'alto, piatto e ben illuminato. "Estrai" usa il modello vision configurato; "Dividi" taglia la pagina in righe uguali da completare a mano.</p>
+  <div class="row" style="margin-bottom:8px"><button id="edExtAll">Estrai tutte</button></div>
+  <div class="pgs" id="edPages"></div>
+  <h2>Note <span id="edCount" style="color:var(--dim);font-weight:400"></span></h2>
+  <div class="row" style="margin-bottom:8px">
+   <button id="edAdd">+ Nota</button><button id="edPart">Ricalcola parziali</button><button id="edSort">Ordina per km</button>
+  </div>
+  <div id="edNotes"></div>
+ </div>
+</section>
+
+<!-- MAPPA -->
+<section id="v-map" class="view">
+ <header class="bar"><button data-go="nav">◀ Navigazione</button><select id="trkSel" style="flex:1"></select></header>
+ <div id="mapEl"></div>
+ <div class="ftr"><button id="mCenter">Centra</button><button id="mGpx">Esporta GPX</button><button id="mShare">Condividi</button><button id="mDel" class="bad">Elimina</button></div>
+</section>
+
+<!-- IMPOSTAZIONI -->
+<section id="v-set" class="view">
+ <header class="bar"><button data-go="nav">◀</button><div class="t">Impostazioni</div></header>
+ <div class="scrollv">
+  <div class="card">
+   <h2 style="margin-top:0">Estrazione (API compatibile OpenAI)</h2>
+   <label>URL base<input id="sApi" placeholder="https://llm.esempio.it/v1" inputmode="url"></label>
+   <label>Modello (vision)<input id="sModel" list="models" placeholder="gemma-4-26B-A4B-it"><datalist id="models"></datalist></label>
+   <label>Token (Bearer)<input id="sToken" type="password" autocomplete="off"></label>
+   <div class="row" style="margin-top:8px"><button id="sTest">Prova connessione</button><span id="sTestR" class="hint"></span></div>
+  </div>
+  <div class="card">
+   <h2 style="margin-top:0">Trip meter</h2>
+   <label>Correzione calibrazione (%)<input id="sCalib" type="number" step="0.1" inputmode="decimal"></label>
+   <p class="hint">Se il trip segna 9,80 km su una tratta di 10,00 metti +2.</p>
+   <label>Precisione GPS minima (m)<input id="sAcc" type="number" step="1" inputmode="numeric"></label>
+   <label style="display:flex;gap:10px;align-items:center;margin-top:10px;color:var(--ink)"><input id="sSync" type="checkbox" style="width:24px;height:24px"> Allinea il trip al km della nota quando confermo</label>
+  </div>
+  <p class="hint">Tasti (telecomando Bluetooth/tastiera): ▶ / ↓ / PagGiù = nota successiva · ◀ / ↑ / PagSu = precedente · Invio / Spazio = conferma · + / − = trip ±10 m.</p>
+ </div>
+</section>
+
+<dialog id="dlg"><form id="dlgF"><h3 id="dlgT"></h3><input id="dlgI"><div class="dlgb"><button type="button" id="dlgNo">Annulla</button><button class="pri" id="dlgOk">OK</button></div></form></dialog>
+<dialog id="menu"><h3>Menu</h3><div class="mg">
+ <button data-m="books">Roadbook…</button>
+ <button data-m="map">Mappa e tracce</button>
+ <button data-m="newtrk">Nuova traccia</button>
+ <button data-m="zero">Azzera trip</button>
+ <button data-m="rev" id="mRev">Conteggio inverso: no</button>
+ <button data-m="theme" id="mTheme">Tema giorno</button>
+ <button data-m="fs">Schermo intero</button>
+ <button data-m="set">Impostazioni</button>
+ <button data-m="close">Chiudi</button>
+</div></dialog>
+<div id="toast" role="status"></div>
+
+<script>
+{
+// ---------- utilità ----------
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(v,d=2)=>v==null||isNaN(v)?'—':Number(v).toFixed(d);
+const num=v=>{if(v==null||v==='')return null;const x=parseFloat(String(v).replace(',','.'));return isNaN(x)?null:x};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const KEYS={next:['ArrowRight','ArrowDown','PageDown','MediaTrackNext'],prev:['ArrowLeft','ArrowUp','PageUp','MediaTrackPrevious'],ok:['Enter',' ','MediaPlayPause'],plus:['+','='],minus:['-']};
+const CDN={leafJs:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',leafCss:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',pdf:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',pdfW:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'};
+const loaded={};
+function loadScript(u){return loaded[u]||(loaded[u]=new Promise((res,rej)=>{const s=document.createElement('script');s.src=u;s.onload=res;s.onerror=()=>{delete loaded[u];rej(new Error('Impossibile caricare '+u))};document.head.appendChild(s)}))}
+function loadCss(u){if(loaded[u])return;loaded[u]=1;const l=document.createElement('link');l.rel='stylesheet';l.href=u;document.head.appendChild(l)}
+const blobUrls=new WeakMap();
+const urlOf=b=>{if(!b)return'';let u=blobUrls.get(b);if(!u){u=URL.createObjectURL(b);blobUrls.set(b,u)}return u};
+const toBlob=(c,t='image/jpeg',q=.85)=>new Promise(r=>c.toBlob(r,t,q));
+
+// ---------- IndexedDB ----------
+const DB={db:null,
+ open(){return new Promise((res,rej)=>{const r=indexedDB.open('roadbook4x4',1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore('books',{keyPath:'id'});d.createObjectStore('tracks',{keyPath:'id'});d.createObjectStore('kv')};r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+ tx(store,mode,fn){return new Promise((res,rej)=>{const t=this.db.transaction(store,mode);const q=fn(t.objectStore(store));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error)})},
+ get(st,k){return this.tx(st,'readonly',s=>s.get(k))},
+ put(st,v,k){return this.tx(st,'readwrite',s=>k===undefined?s.put(v):s.put(v,k))},
+ del(st,k){return this.tx(st,'readwrite',s=>s.delete(k))},
+ all(st){return this.tx(st,'readonly',s=>s.getAll())}};
+
+// ---------- stato ----------
+const DEF_SET={api:'',model:'',token:'',calib:0,maxAcc:25,sync:true};
+let S={...DEF_SET};
+let st={bookId:null,idx:0,odo:0,trackId:null,theme:'night',reverse:false};
+let book=null,track=null,running=false,watchId=null,last=null,lastFix=null,spd=null,cap=null,wakeLock=null,dirtyTrk=false,saveT=null;
+
+const saveState=()=>DB.put('kv',st,'state').catch(()=>{});
+const saveSoon=()=>{clearTimeout(saveT);saveT=setTimeout(saveState,1500)};
+const flushTrack=async()=>{if(track&&dirtyTrk){dirtyTrk=false;try{await DB.put('tracks',track)}catch(e){dirtyTrk=true}}};
+setInterval(flushTrack,15000);
+
+// ---------- UI comuni ----------
+let tt;
+function toast(msg,action,fn){const t=$('#toast');t.innerHTML='<span>'+esc(msg)+'</span>'+(action?'<button id="tAct">'+esc(action)+'</button>':'');t.classList.add('on');if(action)$('#tAct').onclick=()=>{t.classList.remove('on');fn()};clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),action?6000:3000)}
+function ask(title,val,opt={}){return new Promise(res=>{const d=$('#dlg'),i=$('#dlgI');$('#dlgT').textContent=title;i.hidden=opt.input===false;i.type=opt.type||'text';i.inputMode=opt.mode||'';i.value=val??'';
+ const done=v=>{d.close();$('#dlgF').onsubmit=null;res(v)};
+ $('#dlgF').onsubmit=e=>{e.preventDefault();done(opt.input===false?true:i.value)};$('#dlgNo').onclick=()=>done(null);d.oncancel=()=>done(null);
+ d.showModal();if(opt.input!==false)setTimeout(()=>i.select(),60)})}
+function show(v){$$('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+v));if(v==='nav'){renderList();render();scrollCur(false)}}
+$$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
+function applyTheme(){document.documentElement.dataset.theme=st.theme==='day'?'day':'';$('meta[name=theme-color]').content=st.theme==='day'?'#ffffff':'#0e1311';$('#mTheme').textContent=st.theme==='day'?'Tema notte':'Tema giorno';$('#mRev').textContent='Conteggio inverso: '+(st.reverse?'sì':'no')}
+
+// ---------- geodesia ----------
+function hav(a,b){const R=6371008.8,r=Math.PI/180,dLa=(b.la-a.la)*r,dLo=(b.lo-a.lo)*r;const x=Math.sin(dLa/2)**2+Math.cos(a.la*r)*Math.cos(b.la*r)*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.min(1,Math.sqrt(x)))}
+function brg(a,b){const r=Math.PI/180,y=Math.sin((b.lo-a.lo)*r)*Math.cos(b.la*r),x=Math.cos(a.la*r)*Math.sin(b.la*r)-Math.sin(a.la*r)*Math.cos(b.la*r)*Math.cos((b.lo-a.lo)*r);return(Math.atan2(y,x)/r+360)%360}
+
+// ---------- GPS ----------
+function gpsUi(acc,err){const g=$('#gps');g.className='gps '+(err?'bad':acc==null?'':acc<=10?'ok':acc<=S.maxAcc?'mid':'bad');$('#gpsT').textContent=err?err:acc==null?(running?'attesa…':'GPS off'):'±'+Math.round(acc)+' m'}
+function onPos(p){
+ const c=p.coords,pt={la:c.latitude,lo:c.longitude,t:p.timestamp||Date.now(),acc:c.accuracy,alt:c.altitude};
+ lastFix=pt;gpsUi(c.accuracy);
+ const hasSpd=c.speed!=null&&!isNaN(c.speed);if(hasSpd)spd=c.speed*3.6;
+ if(c.accuracy>S.maxAcc){render();return}
+ if(!last){last=pt;rec(pt);render();return}
+ const d=hav(last,pt),dt=Math.max(.001,(pt.t-last.t)/1000);
+ if(d/dt>70){last=pt;render();return} // salto anomalo (>250 km/h)
+ const thr=Math.max(3,Math.min(pt.acc,last.acc)); // filtro jitter: conta solo spostamenti oltre la precisione
+ if(d<thr){if(!hasSpd&&dt>3)spd=0;render();return}
+ cap=(c.heading!=null&&!isNaN(c.heading)&&hasSpd&&c.speed>1)?c.heading:brg(last,pt);
+ if(!hasSpd)spd=d/dt*3.6;
+ const k=d/1000*(1+S.calib/100);
+ st.odo+=st.reverse?-k:k;
+ last=pt;rec(pt);render();saveSoon();
+}
+function onErr(e){gpsUi(null,e.code===1?'permesso negato':e.code===3?'timeout':'errore GPS')}
+async function wake(){try{if(navigator.wakeLock)wakeLock=await navigator.wakeLock.request('screen')}catch(e){}}
+function newTrack(){track={id:uid(),name:new Date().toLocaleString('it-IT',{dateStyle:'short',timeStyle:'short'})+(book?' · '+book.name:''),bookId:book?.id||null,start:Date.now(),pts:[],marks:[]};st.trackId=track.id;dirtyTrk=true;flushTrack();saveState()}
+function startGps(){
+ if(!navigator.geolocation){toast('Geolocalizzazione non disponibile');return}
+ if(!isSecureContext){toast('Serve HTTPS per il GPS');return}
+ if(!track)newTrack();
+ watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:30000});
+ running=true;last=null;wake();gpsUi(null);render();
+}
+function stopGps(){if(watchId!=null)navigator.geolocation.clearWatch(watchId);watchId=null;running=false;last=null;spd=null;flushTrack();saveState();try{wakeLock?.release()}catch(e){}wakeLock=null;gpsUi(null);render()}
+function rec(pt){if(!running||!track)return;track.pts.push([+pt.la.toFixed(6),+pt.lo.toFixed(6),pt.t,pt.alt==null?null:Math.round(pt.alt)]);dirtyTrk=true;mapLive(pt)}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(running)wake()}else{saveState();flushTrack()}});
+addEventListener('pagehide',()=>{saveState();flushTrack()});
+
+// ---------- navigazione ----------
+const notes=()=>book?.notes||[];
+function render(){
+ const n=notes(),i=st.idx,prev=i>0?n[i-1]:null,cur=n[i];
+ const o=$('#odo');o.firstChild.nodeValue=fmt(st.odo);o.classList.toggle('rev',!!st.reverse);
+ const base=i===0?0:(prev?.km??null);
+ $('#par').textContent=base==null?'—':fmt(st.odo-base);
+ const rem=cur&&cur.km!=null?cur.km-st.odo:null;
+ $('#nxt').textContent=rem==null?(cur?'—':'fine'):fmt(rem);
+ const nb=$('#nxtBox');nb.classList.toggle('near',rem!=null&&rem<=.1&&rem>=-.2);nb.classList.toggle('over',rem!=null&&rem<-.2);
+ $('#spd').textContent=running&&spd!=null?Math.round(spd):'—';
+ $('#cap').textContent=cap==null?'—':String(Math.round(cap)%360).padStart(3,'0')+'°';
+ for(let j=i;j<Math.min(n.length,i+6);j++){const e=document.getElementById('r'+j);if(e)e.textContent=n[j].km!=null?(n[j].km-st.odo>=0?'→ ':'↶ ')+fmt(Math.abs(n[j].km-st.odo)):''}
+ const b=$('#bRun');b.textContent=running?'■ Stop':'▶ Avvia';b.classList.toggle('pri',!running);
+ $('#bkName').textContent=book?book.name:'Nessun roadbook';
+}
+function renderList(){
+ const n=notes(),L=$('#list');
+ if(!book){L.innerHTML='<li class="empty" style="border:0;background:none">Nessun roadbook caricato.<br><button class="pri" id="eNew">+ Crea roadbook</button></li>';$('#eNew').onclick=()=>openEditor();return}
+ if(!n.length){L.innerHTML='<li class="empty" style="border:0;background:none">Il roadbook non ha ancora note.<br><button class="pri" id="eEd">Modifica roadbook</button></li>';$('#eEd').onclick=()=>openEditor(book.id);return}
+ L.innerHTML=n.map((x,i)=>{const dg=x.danger>0?'<span class="dg">'+'!'.repeat(Math.min(3,x.danger))+'</span>':'';
+  return '<li data-i="'+i+'" class="'+(i<st.idx?'done':i===st.idx?'cur':'')+'"><div class="nh"><b>'+esc(x.n??i+1)+'</b><span class="km">'+fmt(x.km)+'</span>'+(x.partial!=null?'<span style="color:var(--dim)">+'+fmt(x.partial)+'</span>':'')+(x.cap!=null?'<span>'+esc(Math.round(x.cap))+'°</span>':'')+dg+'<span class="rem" id="r'+i+'"></span></div>'+(x.img?'<img src="'+urlOf(x.img)+'" alt="">':'')+(x.text?'<p>'+esc(x.text)+'</p>':'')+'</li>'}).join('')+
+  '<li data-i="'+n.length+'" class="'+(st.idx>=n.length?'cur':'')+'"><div class="nh"><b>■</b><span>Fine roadbook</span></div></li>';
+}
+function scrollCur(smooth=true){const L=$('#list'),e=L.querySelector('li[data-i="'+st.idx+'"]');if(!e)return;const prev=e.previousElementSibling;const off=prev?Math.min(70,prev.offsetHeight*.35):8;L.scrollTo({top:Math.max(0,e.offsetTop-off),behavior:smooth?'smooth':'auto'})}
+function go(d){const max=notes().length;const v=Math.max(0,Math.min(max,st.idx+d));if(v===st.idx)return;st.idx=v;renderList();render();scrollCur();saveSoon()}
+function confirmNote(){
+ const n=notes();if(st.idx>=n.length)return;
+ const undo={idx:st.idx,odo:st.odo},x=n[st.idx];let mark=null;
+ if(S.sync&&x.km!=null)st.odo=x.km;
+ if(track&&lastFix){mark={la:lastFix.la,lo:lastFix.lo,n:x.n??st.idx+1,t:Date.now(),km:+st.odo.toFixed(3)};track.marks.push(mark);dirtyTrk=true}
+ st.idx++;try{navigator.vibrate?.(60)}catch(e){}
+ renderList();render();scrollCur();saveSoon();
+ toast('Nota '+(x.n??undo.idx+1)+' confermata','Annulla',()=>{st.idx=undo.idx;st.odo=undo.odo;if(mark){const k=track.marks.indexOf(mark);if(k>=0)track.marks.splice(k,1);dirtyTrk=true}renderList();render();scrollCur();saveSoon()});
+}
+function adj(d){st.odo=Math.round((st.odo+d)*1000)/1000;render();saveSoon()}
+function hold(el,fn){let t1,t2;const stop=()=>{clearTimeout(t1);clearInterval(t2)};el.addEventListener('pointerdown',e=>{e.preventDefault();fn();t1=setTimeout(()=>t2=setInterval(fn,80),450)});['pointerup','pointerleave','pointercancel'].forEach(ev=>el.addEventListener(ev,stop));el.addEventListener('contextmenu',e=>e.preventDefault())}
+hold($('#bMinus'),()=>adj(-.01));hold($('#bPlus'),()=>adj(.01));
+$('#bPrev').onclick=()=>go(-1);$('#bNext').onclick=()=>go(1);$('#bOk').onclick=confirmNote;
+$('#bRun').onclick=()=>running?stopGps():startGps();
+$('#list').addEventListener('click',e=>{const li=e.target.closest('li[data-i]');if(!li||e.target.closest('button'))return;const i=+li.dataset.i;if(i!==st.idx){st.idx=i;renderList();render();scrollCur();saveSoon()}});
+$('#odo').onclick=async()=>{const v=await ask('Imposta trip (km)',st.odo.toFixed(2),{type:'text',mode:'decimal'});const x=num(v);if(x!=null){st.odo=x;render();saveState()}};
+addEventListener('keydown',e=>{
+ if(!$('#v-nav').classList.contains('on')||document.querySelector('dialog[open]')||e.target.closest('input,textarea,select'))return;
+ const k=e.key;
+ if(KEYS.next.includes(k))go(1);else if(KEYS.prev.includes(k))go(-1);else if(KEYS.ok.includes(k))confirmNote();else if(KEYS.plus.includes(k))adj(.01);else if(KEYS.minus.includes(k))adj(-.01);else return;
+ e.preventDefault()});
+
+// ---------- menu ----------
+$('#bMenu').onclick=()=>$('#menu').showModal();
+$('#bMap').onclick=()=>openMap();
+$('#menu').addEventListener('click',async e=>{const b=e.target.closest('[data-m]');if(!b)return;const m=b.dataset.m;$('#menu').close();
+ if(m==='books')openBooks();else if(m==='map')openMap();else if(m==='set')openSet();
+ else if(m==='newtrk'){if(await ask('Chiudere la traccia attuale e iniziarne una nuova?',null,{input:false})){await flushTrack();newTrack();toast('Nuova traccia avviata')}}
+ else if(m==='zero'){if(await ask('Azzerare il trip e tornare alla prima nota?',null,{input:false})){st.odo=0;st.idx=0;renderList();render();scrollCur();saveState()}}
+ else if(m==='rev'){st.reverse=!st.reverse;applyTheme();render();saveState()}
+ else if(m==='theme'){st.theme=st.theme==='day'?'night':'day';applyTheme();saveState()}
+ else if(m==='fs'){try{document.fullscreenElement?await document.exitFullscreen():await document.documentElement.requestFullscreen()}catch(err){toast('Schermo intero non disponibile')}}
+});
+
+// ---------- elenco roadbook ----------
+async function openBooks(){
+ const all=(await DB.all('books')).sort((a,b)=>b.created-a.created);
+ $('#books').innerHTML=all.length?all.map(b=>'<div class="card bk" data-id="'+esc(b.id)+'"><div class="t"><b>'+esc(b.name)+'</b><small>'+b.notes.length+' note · '+b.pages.length+' pagine'+(book&&book.id===b.id?' · in uso':'')+'</small></div><button data-a="use" class="pri">Usa</button><button data-a="edit">Modifica</button><button data-a="del" class="bad" aria-label="Elimina">✕</button></div>').join(''):'<p class="empty">Nessun roadbook. Crea il primo con “+ Nuovo”.</p>';
+ show('books');
+}
+$('#books').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const id=b.closest('[data-id]').dataset.id;
+ if(b.dataset.a==='use')await useBook(id);
+ else if(b.dataset.a==='edit')openEditor(id);
+ else if(b.dataset.a==='del'){if(await ask('Eliminare questo roadbook?',null,{input:false})){await DB.del('books',id);if(book&&book.id===id){book=null;st.bookId=null;saveState()}openBooks()}}});
+$('#bNewBook').onclick=()=>openEditor();
+async function useBook(id){
+ const b=await DB.get('books',id);if(!b)return;
+ const same=book&&book.id===id;book=b;st.bookId=id;
+ if(!same){const r=await ask('Azzerare il trip e partire dalla prima nota?',null,{input:false});if(r){st.idx=0;st.odo=0}}
+ st.idx=Math.min(st.idx,b.notes.length);saveState();show('nav');
+}
+
+// ---------- editor ----------
+let ed=null,edT=null;
+const saveEd=()=>{clearTimeout(edT);edT=setTimeout(async()=>{await DB.put('books',ed);if(book&&book.id===ed.id){book=ed}},400)};
+async function openEditor(id){ed=id?await DB.get('books',id):{id:uid(),name:'Roadbook '+new Date().toLocaleDateString('it-IT'),created:Date.now(),pages:[],notes:[]};if(!id)await DB.put('books',ed);renderEd();show('edit')}
+function renderEd(){
+ $('#edName').value=ed.name;
+ $('#edPages').innerHTML=ed.pages.length?ed.pages.map((p,i)=>'<div class="pg" data-i="'+i+'"><img src="'+urlOf(p.blob)+'" alt="Pagina '+(i+1)+'"><div class="st '+(p.status==='errore'?'err':p.status==='estratta'?'ok':'')+'">Pag. '+(i+1)+' · '+esc(p.status||'da estrarre')+(p.err?' – '+esc(p.err):'')+'</div><div class="row"><button data-a="ext">Estrai</button><button data-a="slice">Dividi</button></div><div class="row"><button data-a="rot">Ruota</button><button data-a="up">↑</button><button data-a="delp" class="bad">✕</button></div></div>').join(''):'<p class="hint">Nessuna pagina.</p>';
+ renderEdNotes();
+}
+function renderEdNotes(){
+ $('#edCount').textContent='('+ed.notes.length+')';
+ $('#edNotes').innerHTML=ed.notes.map((x,i)=>'<div class="ne" data-i="'+i+'">'+(x.img?'<img src="'+urlOf(x.img)+'" alt="">':'')+
+  '<div class="ng"><label>N°<input data-f="n" value="'+esc(x.n??'')+'" inputmode="numeric"></label><label>Km<input data-f="km" value="'+esc(x.km??'')+'" inputmode="decimal"></label><label>Parz.<input data-f="partial" value="'+esc(x.partial??'')+'" inputmode="decimal"></label><label>CAP<input data-f="cap" value="'+esc(x.cap??'')+'" inputmode="numeric"></label><label>Peric.<select data-f="danger">'+[0,1,2,3].map(v=>'<option value="'+v+'"'+((x.danger||0)===v?' selected':'')+'>'+(v?'!'.repeat(v):'—')+'</option>').join('')+'</select></label></div>'+
+  '<label>Indicazioni<textarea data-f="text" rows="2">'+esc(x.text||'')+'</textarea></label><div class="na"><button data-a="nu">↑</button><button data-a="nd">↓</button><button data-a="nx" class="bad">Elimina</button></div></div>').join('');
+}
+$('#edName').onchange=e=>{ed.name=e.target.value.trim()||'Roadbook';saveEd()};
+$('#edBack').onclick=async()=>{clearTimeout(edT);await DB.put('books',ed);if(book&&book.id===ed.id)book=ed;openBooks()};
+$('#edUse').onclick=async()=>{clearTimeout(edT);await DB.put('books',ed);await useBook(ed.id)};
+$('#edNotes').addEventListener('change',e=>{const f=e.target.dataset.f;if(!f)return;const x=ed.notes[+e.target.closest('.ne').dataset.i];const v=e.target.value;x[f]=f==='text'?v:f==='danger'?+v:num(v);saveEd()});
+$('#edNotes').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.ne').dataset.i,a=b.dataset.a,n=ed.notes;
+ if(a==='nx')n.splice(i,1);else if(a==='nu'&&i>0)[n[i-1],n[i]]=[n[i],n[i-1]];else if(a==='nd'&&i<n.length-1)[n[i+1],n[i]]=[n[i],n[i+1]];else return;renderEdNotes();saveEd()});
+$('#edAdd').onclick=()=>{const l=ed.notes[ed.notes.length-1];ed.notes.push({id:uid(),page:null,n:l&&l.n!=null?+l.n+1:ed.notes.length+1,km:null,partial:null,cap:null,text:'',danger:0,img:null});renderEdNotes();saveEd();const ne=$('#edNotes').lastElementChild;ne?.scrollIntoView({block:'center'})};
+$('#edPart').onclick=()=>{let p=0;ed.notes.forEach((x,i)=>{if(x.km!=null){x.partial=i===0?null:+(x.km-p).toFixed(2);p=x.km}});renderEdNotes();saveEd();toast('Parziali ricalcolati')};
+$('#edSort').onclick=()=>{ed.notes.sort((a,b)=>(a.km??1e9)-(b.km??1e9));renderEdNotes();saveEd()};
+async function addFiles(files){
+ for(const f of files){
+  try{
+   if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+    toast('Converto il PDF…');await loadScript(CDN.pdf);if(typeof pdfjsLib==='undefined'){delete loaded[CDN.pdf];throw new Error('pdf.js non caricato (serve connessione)')}pdfjsLib.GlobalWorkerOptions.workerSrc=CDN.pdfW;
+    const doc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+    for(let i=1;i<=doc.numPages;i++){const pg=await doc.getPage(i);const v0=pg.getViewport({scale:1});const vp=pg.getViewport({scale:Math.min(3,2200/Math.max(v0.width,v0.height))});const c=document.createElement('canvas');c.width=vp.width;c.height=vp.height;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await pg.render({canvasContext:ctx,viewport:vp}).promise;ed.pages.push({id:uid(),blob:await toBlob(c,'image/jpeg',.9),status:'da estrarre'})}
+   }else{ed.pages.push({id:uid(),blob:await scaleBlob(f,2400,.9),status:'da estrarre'})}
+  }catch(err){toast('Errore file: '+err.message)}
+ }
+ renderEd();saveEd();
+}
+async function scaleBlob(b,max,q){const bmp=await createImageBitmap(b);const s=Math.min(1,max/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);bmp.close?.();return toBlob(c,'image/jpeg',q)}
+$('#edCam').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+$('#edFile').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
+$('#edPages').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.pg').dataset.i,p=ed.pages[i],a=b.dataset.a;
+ if(a==='ext')await extractPage(p);
+ else if(a==='slice'){const v=num(await ask('In quante righe dividere la pagina?','6',{mode:'numeric'}));if(v&&v>0&&v<=30){const k=Math.round(v),boxes=Array.from({length:k},(_,j)=>[0,j/k,1,(j+1)/k]);const imgs=await cropAll(p.blob,boxes);placeNotes(p,imgs.map(img=>({img,km:null,partial:null,cap:null,text:'',danger:0,n:null})));p.status='divisa';p.err='';renderEd();saveEd()}}
+ else if(a==='rot'){p.blob=await rotateBlob(p.blob);p.status='da estrarre';renderEd();saveEd()}
+ else if(a==='up'&&i>0){[ed.pages[i-1],ed.pages[i]]=[ed.pages[i],ed.pages[i-1]];renderEd();saveEd()}
+ else if(a==='delp'){if(await ask('Eliminare la pagina e le sue note?',null,{input:false})){ed.notes=ed.notes.filter(x=>x.page!==p.id);ed.pages.splice(i,1);renderEd();saveEd()}}});
+$('#edExtAll').onclick=async()=>{for(const p of ed.pages){if(p.status!=='estratta')await extractPage(p)}toast('Estrazione completata')};
+async function rotateBlob(b){const bmp=await createImageBitmap(b);const c=document.createElement('canvas');c.width=bmp.height;c.height=bmp.width;const x=c.getContext('2d');x.translate(c.width,0);x.rotate(Math.PI/2);x.drawImage(bmp,0,0);bmp.close?.();return toBlob(c,'image/jpeg',.9)}
+async function cropAll(blob,boxes){
+ const bmp=await createImageBitmap(blob),W=bmp.width,H=bmp.height,out=[];
+ for(const bx of boxes){if(!bx){out.push(null);continue}
+  const pad=.006,x0=Math.max(0,bx[0]-pad)*W,y0=Math.max(0,bx[1]-pad)*H,x1=Math.min(1,bx[2]+pad)*W,y1=Math.min(1,bx[3]+pad)*H;
+  const sw=x1-x0,sh=y1-y0,s=Math.min(1,1000/sw),c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw*s));c.height=Math.max(1,Math.round(sh*s));
+  c.getContext('2d').drawImage(bmp,x0,y0,sw,sh,0,0,c.width,c.height);out.push(await toBlob(c,'image/jpeg',.82))}
+ bmp.close?.();return out}
+function placeNotes(p,list){
+ const pi=ed.pages.indexOf(p);ed.notes=ed.notes.filter(x=>x.page!==p.id);
+ let at=0;ed.notes.forEach((x,k)=>{const xi=ed.pages.findIndex(q=>q.id===x.page);if(xi>=0&&xi<pi)at=k+1});
+ ed.notes.splice(at,0,...list.map(x=>({id:uid(),page:p.id,...x})));
+}
+
+// ---------- estrazione con LLM vision ----------
+const PROMPT=`Sei un lettore di roadbook per fuoristrada/rally. La pagina è una griglia di caselle (righe). Ogni casella ha di solito: distanza progressiva in km (il numero più grande, spesso a sinistra), distanza parziale dalla casella precedente (numero più piccolo), un disegno "tulipano" con la direzione da prendere, e note (testo, CAP in gradi, simboli di pericolo ! !! !!!).
+Rispondi SOLO con JSON valido, senza testo prima o dopo, in questo formato:
+{"rows":[{"n":numero casella o null,"km":km progressivi (numero),"partial":km parziali o null,"cap":gradi interi o null,"text":"trascrizione breve in italiano delle note e della manovra del tulipano (es. 'SX su pista bianca', 'DX al bivio, dopo ponte')","danger":0-3,"box":[x0,y0,x1,y1]}]}
+"box" è il riquadro dell'intera casella sulla pagina in coordinate normalizzate 0-1000 (x0,y0 = angolo in alto a sinistra). Ordine di lettura: dall'alto in basso; se la pagina ha più colonne di caselle, prima la colonna di sinistra. Usa il punto decimale. Non inventare caselle; ignora intestazioni e piè di pagina.`;
+function parseJSON(t){
+ t=String(t||'').replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/```(?:json)?/gi,'');
+ const a=t.indexOf('{'),b=t.lastIndexOf('}');
+ if(a>=0&&b>a){try{const j=JSON.parse(t.slice(a,b+1));if(Array.isArray(j.rows))return j.rows;for(const v of Object.values(j))if(Array.isArray(v))return v}catch(e){}}
+ const c=t.indexOf('['),d=t.lastIndexOf(']');if(c>=0&&d>c){try{return JSON.parse(t.slice(c,d+1))}catch(e){}}
+ throw new Error('risposta non in JSON')}
+function normBox(b,iw,ih){
+ if(!Array.isArray(b)||b.length!==4)return null;const a=b.map(Number);if(a.some(v=>isNaN(v)))return null;
+ const mx=Math.max(...a);const sx=mx<=1.001?1:mx<=1000.5?1000:iw,sy=mx<=1.001?1:mx<=1000.5?1000:ih;
+ let[x0,y0,x1,y1]=[a[0]/sx,a[1]/sy,a[2]/sx,a[3]/sy];if(x1<x0)[x0,x1]=[x1,x0];if(y1<y0)[y0,y1]=[y1,y0];
+ const cl=v=>Math.max(0,Math.min(1,v));[x0,y0,x1,y1]=[cl(x0),cl(y0),cl(x1),cl(y1)];
+ return(x1-x0<.05||y1-y0<.015)?null:[x0,y0,x1,y1]}
+async function extractPage(p){
+ if(!S.api||!S.model){toast('Configura URL e modello nelle Impostazioni');openSet();return}
+ p.status='estrazione…';p.err='';renderEd();
+ try{
+  const bmp=await createImageBitmap(p.blob),s=Math.min(1,1600/Math.max(bmp.width,bmp.height)),c=document.createElement('canvas');c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);bmp.close?.();
+  const dataUrl=c.toDataURL('image/jpeg',.85);
+  const r=await fetch(S.api.replace(/\/+$/,'')+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',...(S.token?{Authorization:'Bearer '+S.token}:{})},body:JSON.stringify({model:S.model,temperature:0,max_tokens:6000,messages:[{role:'system',content:PROMPT},{role:'user',content:[{type:'text',text:'Estrai tutte le caselle di questa pagina di roadbook.'},{type:'image_url',image_url:{url:dataUrl}}]}]})});
+  if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,160));
+  const j=await r.json(),rows=parseJSON(j.choices?.[0]?.message?.content);
+  if(!rows.length)throw new Error('nessuna casella trovata');
+  let boxes=rows.map(x=>normBox(x.box,c.width,c.height));
+  if(boxes.filter(Boolean).length<rows.length/2){const k=rows.length;boxes=rows.map((_,i)=>[0,i/k,1,(i+1)/k])}
+  const imgs=await cropAll(p.blob,boxes);
+  placeNotes(p,rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]})));
+  p.status='estratta';
+ }catch(err){p.status='errore';p.err=err.message.includes('Failed to fetch')?'rete/CORS':err.message}
+ renderEd();saveEd();
+}
+
+// ---------- impostazioni ----------
+function openSet(){$('#sApi').value=S.api;$('#sModel').value=S.model;$('#sToken').value=S.token;$('#sCalib').value=S.calib;$('#sAcc').value=S.maxAcc;$('#sSync').checked=!!S.sync;show('set')}
+$('#v-set').addEventListener('change',()=>{S={api:$('#sApi').value.trim(),model:$('#sModel').value.trim(),token:$('#sToken').value.trim(),calib:num($('#sCalib').value)||0,maxAcc:num($('#sAcc').value)||25,sync:$('#sSync').checked};DB.put('kv',S,'settings').catch(()=>{})});
+$('#sTest').onclick=async()=>{const o=$('#sTestR');o.textContent='…';try{const r=await fetch($('#sApi').value.trim().replace(/\/+$/,'')+'/models',{headers:$('#sToken').value.trim()?{Authorization:'Bearer '+$('#sToken').value.trim()}:{}});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const ids=(j.data||[]).map(m=>m.id);$('#models').innerHTML=ids.map(i=>'<option value="'+esc(i)+'">').join('');o.textContent='OK: '+ids.length+' modelli';}catch(e){o.textContent='Errore: '+(e.message.includes('fetch')?'rete o CORS':e.message)}};
+
+// ---------- mappa ----------
+let map=null,layer=null,poly=null,me=null,mapTr=null;
+async function openMap(){
+ show('map');await flushTrack();
+ try{loadCss(CDN.leafCss);await loadScript(CDN.leafJs);if(typeof L==='undefined')throw 0}catch(e){delete loaded[CDN.leafJs];toast('Mappa non disponibile: serve connessione la prima volta');return}
+ if(!map){map=L.map('mapEl',{zoomControl:true});L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{maxZoom:17,subdomains:'abc',attribution:'Dati © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM · Stile © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'}).addTo(map);layer=L.layerGroup().addTo(map)}
+ const all=(await DB.all('tracks')).sort((a,b)=>b.start-a.start);
+ $('#trkSel').innerHTML=all.length?all.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+' · '+t.pts.length+' pt'+(track&&t.id===track.id?' (attuale)':'')+'</option>').join(''):'<option value="">Nessuna traccia</option>';
+ if(track)$('#trkSel').value=track.id;
+ setTimeout(()=>{map.invalidateSize();drawMap()},50);
+}
+async function drawMap(){
+ const id=$('#trkSel').value;mapTr=id?(track&&track.id===id?track:await DB.get('tracks',id)):null;
+ layer.clearLayers();poly=null;me=null;
+ if(mapTr&&mapTr.pts.length){
+  poly=L.polyline(mapTr.pts.map(p=>[p[0],p[1]]),{color:'#d1008f',weight:5,opacity:.9}).addTo(layer);
+  mapTr.marks.forEach(m=>L.circleMarker([m.la,m.lo],{radius:7,color:'#111',weight:2,fillColor:'#ffe600',fillOpacity:1}).bindTooltip(String(m.n),{permanent:true,direction:'top',className:'mk'}).addTo(layer));
+  map.fitBounds(poly.getBounds(),{padding:[30,30],maxZoom:16});
+ }else if(lastFix)map.setView([lastFix.la,lastFix.lo],14);else map.setView([42.5,12.5],6);
+ if(lastFix)me=L.circleMarker([lastFix.la,lastFix.lo],{radius:9,color:'#fff',weight:3,fillColor:'#1a73e8',fillOpacity:1}).addTo(layer);
+}
+function mapLive(pt){if(!map||!$('#v-map').classList.contains('on'))return;if(mapTr&&track&&mapTr.id===track.id){if(!poly)poly=L.polyline([],{color:'#d1008f',weight:5}).addTo(layer);poly.addLatLng([pt.la,pt.lo])}if(me)me.setLatLng([pt.la,pt.lo]);else me=L.circleMarker([pt.la,pt.lo],{radius:9,color:'#fff',weight:3,fillColor:'#1a73e8',fillOpacity:1}).addTo(layer)}
+$('#trkSel').onchange=drawMap;
+$('#mCenter').onclick=()=>{if(lastFix)map?.setView([lastFix.la,lastFix.lo],Math.max(map.getZoom(),14));else toast('Nessuna posizione GPS')};
+function gpx(t){const x=v=>esc(v);
+ return '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Roadbook 4x4" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>'+x(t.name)+'</name><time>'+new Date(t.start).toISOString()+'</time></metadata>\n'+
+ t.marks.map(m=>'<wpt lat="'+m.la+'" lon="'+m.lo+'"><time>'+new Date(m.t).toISOString()+'</time><name>'+x('Nota '+m.n)+'</name><desc>'+x('km '+m.km)+'</desc></wpt>').join('\n')+
+ '\n<trk><name>'+x(t.name)+'</name><trkseg>\n'+t.pts.map(p=>'<trkpt lat="'+p[0]+'" lon="'+p[1]+'">'+(p[3]!=null?'<ele>'+p[3]+'</ele>':'')+'<time>'+new Date(p[2]).toISOString()+'</time></trkpt>').join('\n')+'\n</trkseg></trk>\n</gpx>\n'}
+const gpxName=t=>'traccia-'+new Date(t.start).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.gpx';
+$('#mGpx').onclick=()=>{if(!mapTr||!mapTr.pts.length)return toast('Traccia vuota');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([gpx(mapTr)],{type:'application/gpx+xml'}));a.download=gpxName(mapTr);document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)};
+$('#mShare').onclick=async()=>{if(!mapTr||!mapTr.pts.length)return toast('Traccia vuota');const f=new File([gpx(mapTr)],gpxName(mapTr),{type:'application/gpx+xml'});try{if(navigator.canShare?.({files:[f]}))await navigator.share({files:[f],title:mapTr.name});else toast('Condivisione non supportata: usa Esporta')}catch(e){}};
+$('#mDel').onclick=async()=>{if(!mapTr)return;if(!await ask('Eliminare la traccia “'+mapTr.name+'”?',null,{input:false}))return;await DB.del('tracks',mapTr.id);if(track&&track.id===mapTr.id){track=null;st.trackId=null;saveState();if(running)newTrack()}openMap()};
+
+// ---------- avvio ----------
+(async()=>{
+ try{await DB.open()}catch(e){toast('Archivio locale non disponibile');return}
+ S={...DEF_SET,...(await DB.get('kv','settings').catch(()=>null)||{})};
+ st={...st,...(await DB.get('kv','state').catch(()=>null)||{})};
+ applyTheme();
+ if(st.bookId)book=await DB.get('books',st.bookId)||null;
+ if(st.trackId)track=await DB.get('tracks',st.trackId)||null;
+ renderList();render();scrollCur(false);
+ navigator.storage?.persist?.().catch(()=>{});
+ if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+}
+</script>
+</body>
+</html>
