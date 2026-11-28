@@ -162,7 +162,7 @@ dialog h3{margin:0 0 10px;font-size:20px}
    <div style="flex:1"><input id="edCam" type="file" accept="image/*" capture="environment" hidden><button class="pri" type="button" style="width:100%" onclick="this.previousElementSibling.click()">Scatta foto</button></div>
    <div style="flex:1"><input id="edFile" type="file" accept="image/*,application/pdf" multiple hidden><button type="button" style="width:100%" onclick="this.previousElementSibling.click()">Carica immagini/PDF</button></div>
   </div>
-  <p class="hint">Fotografa ogni foglio dall'alto, piatto e ben illuminato. "Estrai" usa il modello vision configurato; "Dividi" taglia la pagina in una griglia di caselle uguali (righe × colonne) da completare a mano.</p>
+  <p class="hint">Fotografa ogni foglio dall'alto, piatto e ben illuminato. "Estrai" usa il modello vision configurato; "JSON" importa la risposta copiata dall'app Gemini; "Dividi" taglia la pagina in una griglia di caselle uguali (righe × colonne) da completare a mano.</p>
   <div class="row" style="margin-bottom:8px"><button id="edExtAll">Estrai tutte</button></div>
   <div class="pgs" id="edPages"></div>
   <h2>Note <span id="edCount" style="color:var(--dim);font-weight:400"></span></h2>
@@ -187,7 +187,8 @@ dialog h3{margin:0 0 10px;font-size:20px}
   <div class="card">
    <h2 style="margin-top:0">Estrazione (API compatibile OpenAI)</h2>
    <label>URL base<input id="sApi" placeholder="https://llm.esempio.it/v1" inputmode="url"></label>
-   <label>Modello (vision)<input id="sModel" list="models" placeholder="gemma-4-26B-A4B-it"><datalist id="models"></datalist></label>
+   <label>Modello (vision)<input id="sModel" placeholder="gemma-4-26B-A4B-it" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+   <label id="sModelL" hidden>Scegli dall'elenco<select id="sModelSel"></select></label>
    <label>Token (Bearer)<input id="sToken" type="password" autocomplete="off"></label>
    <div class="row" style="margin-top:8px"><button id="sTest">Prova connessione</button><span id="sTestR" class="hint"></span></div>
   </div>
@@ -203,6 +204,7 @@ dialog h3{margin:0 0 10px;font-size:20px}
 </section>
 
 <dialog id="dlg"><form id="dlgF"><h3 id="dlgT"></h3><input id="dlgI"><div class="dlgb"><button type="button" id="dlgNo">Annulla</button><button class="pri" id="dlgOk">OK</button></div></form></dialog>
+<dialog id="jdlg"><h3>Incolla JSON</h3><p class="hint">1. Copia il prompt. 2. Nell'app Gemini allega la foto di questa pagina e incolla il prompt. 3. Copia la risposta e incollala qui.</p><button type="button" id="jCopy" style="width:100%;margin-bottom:8px">Copia prompt</button><textarea id="jTxt" rows="8" placeholder='{"rows":[...]}' spellcheck="false"></textarea><div id="jErr" class="hint" style="color:var(--bad)"></div><div class="dlgb"><button type="button" id="jNo">Annulla</button><button type="button" class="pri" id="jOk">Importa</button></div></dialog>
 <dialog id="menu"><h3>Menu</h3><div class="mg">
  <button data-m="books">Roadbook…</button>
  <button data-m="map">Mappa e tracce</button>
@@ -385,7 +387,7 @@ const saveEd=()=>{clearTimeout(edT);edT=setTimeout(async()=>{await DB.put('books
 async function openEditor(id){ed=id?await DB.get('books',id):{id:uid(),name:'Roadbook '+new Date().toLocaleDateString('it-IT'),created:Date.now(),pages:[],notes:[]};if(!id)await DB.put('books',ed);renderEd();show('edit')}
 function renderEd(){
  $('#edName').value=ed.name;
- $('#edPages').innerHTML=ed.pages.length?ed.pages.map((p,i)=>'<div class="pg" data-i="'+i+'"><img src="'+urlOf(p.blob)+'" alt="Pagina '+(i+1)+'"><div class="st '+(p.status==='errore'||/⚠/.test(p.err||'')?'err':p.status==='estratta'?'ok':'')+'">Pag. '+(i+1)+' · '+esc(p.status||'da estrarre')+(p.err?' – '+esc(p.err):'')+'</div><div class="row"><button data-a="ext">Estrai</button><button data-a="slice">Dividi</button></div><div class="row"><button data-a="rot">Ruota</button><button data-a="up">↑</button><button data-a="delp" class="bad">✕</button></div></div>').join(''):'<p class="hint">Nessuna pagina.</p>';
+ $('#edPages').innerHTML=ed.pages.length?ed.pages.map((p,i)=>'<div class="pg" data-i="'+i+'"><img src="'+urlOf(p.blob)+'" alt="Pagina '+(i+1)+'"><div class="st '+(p.status==='errore'||/⚠/.test(p.err||'')?'err':p.status==='estratta'?'ok':'')+'">Pag. '+(i+1)+' · '+esc(p.status||'da estrarre')+(p.err?' – '+esc(p.err):'')+'</div><div class="row"><button data-a="ext">Estrai</button><button data-a="json">JSON</button><button data-a="slice">Dividi</button></div><div class="row"><button data-a="rot">Ruota</button><button data-a="up">↑</button><button data-a="delp" class="bad">✕</button></div></div>').join(''):'<p class="hint">Nessuna pagina.</p>';
  renderEdNotes();
 }
 function renderEdNotes(){
@@ -421,6 +423,7 @@ $('#edCam').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('#edFile').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('#edPages').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.pg').dataset.i,p=ed.pages[i],a=b.dataset.a;
  if(a==='ext')await extractPage(p);
+ else if(a==='json')await importJson(p);
  else if(a==='slice'){const v=String(await ask('Griglia: righe x colonne (es. 6 oppure 4x3; aggiungi "c" per leggere per colonne, es. 8x2c)','4x3')||'').trim().toLowerCase();const m=v.match(/^(\d+)\s*(?:[x×*]\s*(\d+))?\s*(c?)$/);const R=m?+m[1]:0,C=m?+(m[2]||1):0;if(R>0&&C>0&&R*C<=60){const boxes=[];if(m[3])for(let c=0;c<C;c++)for(let r=0;r<R;r++)boxes.push([c/C,r/R,(c+1)/C,(r+1)/R]);else for(let r=0;r<R;r++)for(let c=0;c<C;c++)boxes.push([c/C,r/R,(c+1)/C,(r+1)/R]);const imgs=await cropAll(p.blob,boxes);placeNotes(p,imgs.map(img=>({img,km:null,partial:null,cap:null,text:'',danger:0,n:null})));p.status='divisa';p.err='';renderEd();saveEd()}}
  else if(a==='rot'){p.blob=await rotateBlob(p.blob);p.status='da estrarre';renderEd();saveEd()}
  else if(a==='up'&&i>0){[ed.pages[i-1],ed.pages[i]]=[ed.pages[i],ed.pages[i-1]];renderEd();saveEd()}
@@ -464,6 +467,24 @@ function normBox(b,iw,ih){
  let[x0,y0,x1,y1]=[a[0]/sx,a[1]/sy,a[2]/sx,a[3]/sy];if(x1<x0)[x0,x1]=[x1,x0];if(y1<y0)[y0,y1]=[y1,y0];
  const cl=v=>Math.max(0,Math.min(1,v));[x0,y0,x1,y1]=[cl(x0),cl(y0),cl(x1),cl(y1)];
  return(x1-x0<.05||y1-y0<.015)?null:[x0,y0,x1,y1]}
+async function applyRows(p,rows,total,iw,ih){
+ if(!rows.length)throw new Error('nessuna casella trovata');
+  let boxes=rows.map(x=>normBox(x.box,iw,ih));
+  if(boxes.filter(Boolean).length<rows.length/2){const k=rows.length;boxes=rows.map((_,i)=>[0,i/k,1,(i+1)/k])}
+  const imgs=await cropAll(p.blob,boxes);
+  let list=rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]}));
+  const ns=list.map(x=>x.n).filter(v=>v!=null);
+  if(ns.length>=list.length*.6&&new Set(ns).size===ns.length){let ln=-1e9;list=list.map((x,i)=>{const k=x.n??ln+.5;if(x.n!=null)ln=x.n;else ln=k;return[x,k,i]}).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0])}
+  placeNotes(p,list);fillKm(ed.notes);
+  const sum=list.reduce((t,x)=>t+(x.partial||0),0);
+  p.status='estratta';p.err=list.length+' caselle'+(total!=null?(Math.abs(sum-total)<.006?' · somma '+fmt(sum,3)+' ✓':' · ⚠ somma '+fmt(sum,3)+' ≠ '+fmt(total,3)):'');
+}
+async function importJson(p){
+ const d=$('#jdlg'),t=$('#jTxt');t.value='';$('#jErr').textContent='';d.showModal();
+ $('#jCopy').onclick=async()=>{try{await navigator.clipboard.writeText(PROMPT);toast('Prompt copiato: incollalo in Gemini insieme alla foto')}catch(e){t.value=PROMPT;t.select();toast('Copia il prompt dal riquadro')}};
+ $('#jNo').onclick=()=>d.close();
+ $('#jOk').onclick=async()=>{try{const {rows,total}=parseJSON(t.value);const bmp=await createImageBitmap(p.blob);const w=bmp.width,h=bmp.height;bmp.close?.();await applyRows(p,rows,total,w,h);d.close();renderEd();saveEd();toast('Importate '+rows.length+' caselle')}catch(e){$('#jErr').textContent='Errore: '+e.message}};
+}
 async function extractPage(p){
  if(!S.api||!S.model){toast('Configura URL e modello nelle Impostazioni');openSet();return}
  p.status='estrazione…';p.err='';renderEd();
@@ -474,23 +495,18 @@ async function extractPage(p){
   if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,160));
   const j=await r.json(),{rows,total}=parseJSON(j.choices?.[0]?.message?.content);
   if(!rows.length)throw new Error('nessuna casella trovata');
-  let boxes=rows.map(x=>normBox(x.box,c.width,c.height));
-  if(boxes.filter(Boolean).length<rows.length/2){const k=rows.length;boxes=rows.map((_,i)=>[0,i/k,1,(i+1)/k])}
-  const imgs=await cropAll(p.blob,boxes);
-  let list=rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]}));
-  const ns=list.map(x=>x.n).filter(v=>v!=null);
-  if(ns.length>=list.length*.6&&new Set(ns).size===ns.length){let ln=-1e9;list=list.map((x,i)=>{const k=x.n??ln+.5;if(x.n!=null)ln=x.n;else ln=k;return[x,k,i]}).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0])}
-  placeNotes(p,list);fillKm(ed.notes);
-  const sum=list.reduce((t,x)=>t+(x.partial||0),0);
-  p.status='estratta';p.err=list.length+' caselle'+(total!=null?(Math.abs(sum-total)<.006?' · somma '+fmt(sum,3)+' ✓':' · ⚠ somma '+fmt(sum,3)+' ≠ '+fmt(total,3)):'');
+  await applyRows(p,rows,total,c.width,c.height);
  }catch(err){p.status='errore';p.err=err.message.includes('Failed to fetch')?'rete/CORS':err.message}
  renderEd();saveEd();
 }
 
 // ---------- impostazioni ----------
 function openSet(){$('#sApi').value=S.api;$('#sModel').value=S.model;$('#sToken').value=S.token;$('#sCalib').value=S.calib;$('#sAcc').value=S.maxAcc;$('#sSync').checked=!!S.sync;show('set')}
-$('#v-set').addEventListener('change',()=>{S={api:$('#sApi').value.trim(),model:$('#sModel').value.trim(),token:$('#sToken').value.trim(),calib:num($('#sCalib').value)||0,maxAcc:num($('#sAcc').value)||25,sync:$('#sSync').checked};DB.put('kv',S,'settings').catch(()=>{})});
-$('#sTest').onclick=async()=>{const o=$('#sTestR');o.textContent='…';try{const r=await fetch($('#sApi').value.trim().replace(/\/+$/,'')+'/models',{headers:$('#sToken').value.trim()?{Authorization:'Bearer '+$('#sToken').value.trim()}:{}});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();const ids=(j.data||[]).map(m=>m.id);$('#models').innerHTML=ids.map(i=>'<option value="'+esc(i)+'">').join('');o.textContent='OK: '+ids.length+' modelli';}catch(e){o.textContent='Errore: '+(e.message.includes('fetch')?'rete o CORS':e.message)}};
+$('#v-set').addEventListener('change',()=>{S={api:$('#sApi').value.trim(),model:$('#sModel').value.trim().replace(/^models\//,''),token:$('#sToken').value.trim(),calib:num($('#sCalib').value)||0,maxAcc:num($('#sAcc').value)||25,sync:$('#sSync').checked};DB.put('kv',S,'settings').catch(()=>{})});
+$('#sTest').onclick=async()=>{const o=$('#sTestR');o.textContent='…';try{const r=await fetch($('#sApi').value.trim().replace(/\/+$/,'')+'/models',{headers:$('#sToken').value.trim()?{Authorization:'Bearer '+$('#sToken').value.trim()}:{}});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();
+ const ids=[...new Set((j.data||j.models||[]).map(m=>String(m.id||m.name||'').replace(/^models\//,'')).filter(Boolean))].filter(i=>!/embed|tts|imagen|veo|aqa|audio|live/i.test(i)).sort((a,b)=>(/flash/i.test(b)-/flash/i.test(a))||b.localeCompare(a,undefined,{numeric:true}));
+ const sel=$('#sModelSel');sel.innerHTML='<option value="">— '+ids.length+' modelli —</option>'+ids.map(i=>'<option value="'+esc(i)+'"'+(i===$('#sModel').value?' selected':'')+'>'+esc(i)+'</option>').join('');$('#sModelL').hidden=!ids.length;o.textContent='OK: '+ids.length+' modelli';}catch(e){o.textContent='Errore: '+(e.message.includes('fetch')?'rete o CORS':e.message)}};
+$('#sModelSel').onchange=e=>{if(e.target.value){$('#sModel').value=e.target.value;$('#sModel').dispatchEvent(new Event('change',{bubbles:true}))}};
 
 // ---------- mappa ----------
 let map=null,layer=null,poly=null,me=null,mapTr=null;
