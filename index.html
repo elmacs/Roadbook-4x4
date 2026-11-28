@@ -61,7 +61,8 @@ label{display:block;font-size:14px;color:var(--dim)}
 .nh .km{font-weight:700}
 .nh .rem{margin-left:auto;font-weight:700;white-space:nowrap}
 .nh .dg{color:var(--bad);font-weight:900;letter-spacing:1px}
-.list img{display:block;width:100%;background:#fff}
+.list img{display:block;width:100%;max-height:46vh;object-fit:contain;background:#fff}
+.list li.cur img{max-height:56vh}
 .list p{margin:0;padding:6px 10px 10px;font-size:18px}
 .empty{padding:24px 16px;text-align:center;color:var(--dim)}
 .empty button{margin-top:12px}
@@ -161,12 +162,12 @@ dialog h3{margin:0 0 10px;font-size:20px}
    <div style="flex:1"><input id="edCam" type="file" accept="image/*" capture="environment" hidden><button class="pri" type="button" style="width:100%" onclick="this.previousElementSibling.click()">Scatta foto</button></div>
    <div style="flex:1"><input id="edFile" type="file" accept="image/*,application/pdf" multiple hidden><button type="button" style="width:100%" onclick="this.previousElementSibling.click()">Carica immagini/PDF</button></div>
   </div>
-  <p class="hint">Fotografa ogni foglio dall'alto, piatto e ben illuminato. "Estrai" usa il modello vision configurato; "Dividi" taglia la pagina in righe uguali da completare a mano.</p>
+  <p class="hint">Fotografa ogni foglio dall'alto, piatto e ben illuminato. "Estrai" usa il modello vision configurato; "Dividi" taglia la pagina in una griglia di caselle uguali (righe × colonne) da completare a mano.</p>
   <div class="row" style="margin-bottom:8px"><button id="edExtAll">Estrai tutte</button></div>
   <div class="pgs" id="edPages"></div>
   <h2>Note <span id="edCount" style="color:var(--dim);font-weight:400"></span></h2>
   <div class="row" style="margin-bottom:8px">
-   <button id="edAdd">+ Nota</button><button id="edPart">Ricalcola parziali</button><button id="edSort">Ordina per km</button>
+   <button id="edAdd">+ Nota</button><button id="edPart">Completa km/parziali</button><button id="edSort">Ordina per km</button>
   </div>
   <div id="edNotes"></div>
  </div>
@@ -321,7 +322,7 @@ function renderList(){
  if(!book){L.innerHTML='<li class="empty" style="border:0;background:none">Nessun roadbook caricato.<br><button class="pri" id="eNew">+ Crea roadbook</button></li>';$('#eNew').onclick=()=>openEditor();return}
  if(!n.length){L.innerHTML='<li class="empty" style="border:0;background:none">Il roadbook non ha ancora note.<br><button class="pri" id="eEd">Modifica roadbook</button></li>';$('#eEd').onclick=()=>openEditor(book.id);return}
  L.innerHTML=n.map((x,i)=>{const dg=x.danger>0?'<span class="dg">'+'!'.repeat(Math.min(3,x.danger))+'</span>':'';
-  return '<li data-i="'+i+'" class="'+(i<st.idx?'done':i===st.idx?'cur':'')+'"><div class="nh"><b>'+esc(x.n??i+1)+'</b><span class="km">'+fmt(x.km)+'</span>'+(x.partial!=null?'<span style="color:var(--dim)">+'+fmt(x.partial)+'</span>':'')+(x.cap!=null?'<span>'+esc(Math.round(x.cap))+'°</span>':'')+dg+'<span class="rem" id="r'+i+'"></span></div>'+(x.img?'<img src="'+urlOf(x.img)+'" alt="">':'')+(x.text?'<p>'+esc(x.text)+'</p>':'')+'</li>'}).join('')+
+  return '<li data-i="'+i+'" class="'+(i<st.idx?'done':i===st.idx?'cur':'')+'"><div class="nh"><b>'+(x.n!=null?esc(x.n):'·')+'</b><span class="km">'+fmt(x.km)+'</span>'+(x.partial!=null?'<span style="color:var(--dim)">+'+fmt(x.partial)+'</span>':'')+(x.cap!=null?'<span>'+esc(Math.round(x.cap))+'°</span>':'')+dg+'<span class="rem" id="r'+i+'"></span></div>'+(x.img?'<img src="'+urlOf(x.img)+'" alt="">':'')+(x.text?'<p>'+esc(x.text)+'</p>':'')+'</li>'}).join('')+
   '<li data-i="'+n.length+'" class="'+(st.idx>=n.length?'cur':'')+'"><div class="nh"><b>■</b><span>Fine roadbook</span></div></li>';
 }
 function scrollCur(smooth=true){const L=$('#list'),e=L.querySelector('li[data-i="'+st.idx+'"]');if(!e)return;const prev=e.previousElementSibling;const off=prev?Math.min(70,prev.offsetHeight*.35):8;L.scrollTo({top:Math.max(0,e.offsetTop-off),behavior:smooth?'smooth':'auto'})}
@@ -384,7 +385,7 @@ const saveEd=()=>{clearTimeout(edT);edT=setTimeout(async()=>{await DB.put('books
 async function openEditor(id){ed=id?await DB.get('books',id):{id:uid(),name:'Roadbook '+new Date().toLocaleDateString('it-IT'),created:Date.now(),pages:[],notes:[]};if(!id)await DB.put('books',ed);renderEd();show('edit')}
 function renderEd(){
  $('#edName').value=ed.name;
- $('#edPages').innerHTML=ed.pages.length?ed.pages.map((p,i)=>'<div class="pg" data-i="'+i+'"><img src="'+urlOf(p.blob)+'" alt="Pagina '+(i+1)+'"><div class="st '+(p.status==='errore'?'err':p.status==='estratta'?'ok':'')+'">Pag. '+(i+1)+' · '+esc(p.status||'da estrarre')+(p.err?' – '+esc(p.err):'')+'</div><div class="row"><button data-a="ext">Estrai</button><button data-a="slice">Dividi</button></div><div class="row"><button data-a="rot">Ruota</button><button data-a="up">↑</button><button data-a="delp" class="bad">✕</button></div></div>').join(''):'<p class="hint">Nessuna pagina.</p>';
+ $('#edPages').innerHTML=ed.pages.length?ed.pages.map((p,i)=>'<div class="pg" data-i="'+i+'"><img src="'+urlOf(p.blob)+'" alt="Pagina '+(i+1)+'"><div class="st '+(p.status==='errore'||/⚠/.test(p.err||'')?'err':p.status==='estratta'?'ok':'')+'">Pag. '+(i+1)+' · '+esc(p.status||'da estrarre')+(p.err?' – '+esc(p.err):'')+'</div><div class="row"><button data-a="ext">Estrai</button><button data-a="slice">Dividi</button></div><div class="row"><button data-a="rot">Ruota</button><button data-a="up">↑</button><button data-a="delp" class="bad">✕</button></div></div>').join(''):'<p class="hint">Nessuna pagina.</p>';
  renderEdNotes();
 }
 function renderEdNotes(){
@@ -400,7 +401,8 @@ $('#edNotes').addEventListener('change',e=>{const f=e.target.dataset.f;if(!f)ret
 $('#edNotes').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.ne').dataset.i,a=b.dataset.a,n=ed.notes;
  if(a==='nx')n.splice(i,1);else if(a==='nu'&&i>0)[n[i-1],n[i]]=[n[i],n[i-1]];else if(a==='nd'&&i<n.length-1)[n[i+1],n[i]]=[n[i],n[i+1]];else return;renderEdNotes();saveEd()});
 $('#edAdd').onclick=()=>{const l=ed.notes[ed.notes.length-1];ed.notes.push({id:uid(),page:null,n:l&&l.n!=null?+l.n+1:ed.notes.length+1,km:null,partial:null,cap:null,text:'',danger:0,img:null});renderEdNotes();saveEd();const ne=$('#edNotes').lastElementChild;ne?.scrollIntoView({block:'center'})};
-$('#edPart').onclick=()=>{let p=0;ed.notes.forEach((x,i)=>{if(x.km!=null){x.partial=i===0?null:+(x.km-p).toFixed(2);p=x.km}});renderEdNotes();saveEd();toast('Parziali ricalcolati')};
+function fillKm(ns){let prev=null;ns.forEach((x,i)=>{if(x.km==null&&x.partial!=null&&(prev!=null||i===0))x.km=+((prev??0)+x.partial).toFixed(2);else if(x.km==null&&x.partial==null&&prev!=null&&x.text)x.km=prev;if(x.km!=null&&x.partial==null&&prev!=null)x.partial=+(x.km-prev).toFixed(2);if(x.km!=null)prev=x.km})}
+$('#edPart').onclick=()=>{fillKm(ed.notes);renderEdNotes();saveEd();toast('Km e parziali completati')};
 $('#edSort').onclick=()=>{ed.notes.sort((a,b)=>(a.km??1e9)-(b.km??1e9));renderEdNotes();saveEd()};
 async function addFiles(files){
  for(const f of files){
@@ -419,7 +421,7 @@ $('#edCam').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('#edFile').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 $('#edPages').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.pg').dataset.i,p=ed.pages[i],a=b.dataset.a;
  if(a==='ext')await extractPage(p);
- else if(a==='slice'){const v=num(await ask('In quante righe dividere la pagina?','6',{mode:'numeric'}));if(v&&v>0&&v<=30){const k=Math.round(v),boxes=Array.from({length:k},(_,j)=>[0,j/k,1,(j+1)/k]);const imgs=await cropAll(p.blob,boxes);placeNotes(p,imgs.map(img=>({img,km:null,partial:null,cap:null,text:'',danger:0,n:null})));p.status='divisa';p.err='';renderEd();saveEd()}}
+ else if(a==='slice'){const v=String(await ask('Griglia: righe x colonne (es. 6 oppure 4x3; aggiungi "c" per leggere per colonne, es. 8x2c)','4x3')||'').trim().toLowerCase();const m=v.match(/^(\d+)\s*(?:[x×*]\s*(\d+))?\s*(c?)$/);const R=m?+m[1]:0,C=m?+(m[2]||1):0;if(R>0&&C>0&&R*C<=60){const boxes=[];if(m[3])for(let c=0;c<C;c++)for(let r=0;r<R;r++)boxes.push([c/C,r/R,(c+1)/C,(r+1)/R]);else for(let r=0;r<R;r++)for(let c=0;c<C;c++)boxes.push([c/C,r/R,(c+1)/C,(r+1)/R]);const imgs=await cropAll(p.blob,boxes);placeNotes(p,imgs.map(img=>({img,km:null,partial:null,cap:null,text:'',danger:0,n:null})));p.status='divisa';p.err='';renderEd();saveEd()}}
  else if(a==='rot'){p.blob=await rotateBlob(p.blob);p.status='da estrarre';renderEd();saveEd()}
  else if(a==='up'&&i>0){[ed.pages[i-1],ed.pages[i]]=[ed.pages[i],ed.pages[i-1]];renderEd();saveEd()}
  else if(a==='delp'){if(await ask('Eliminare la pagina e le sue note?',null,{input:false})){ed.notes=ed.notes.filter(x=>x.page!==p.id);ed.pages.splice(i,1);renderEd();saveEd()}}});
@@ -428,7 +430,7 @@ async function rotateBlob(b){const bmp=await createImageBitmap(b);const c=docume
 async function cropAll(blob,boxes){
  const bmp=await createImageBitmap(blob),W=bmp.width,H=bmp.height,out=[];
  for(const bx of boxes){if(!bx){out.push(null);continue}
-  const pad=.006,x0=Math.max(0,bx[0]-pad)*W,y0=Math.max(0,bx[1]-pad)*H,x1=Math.min(1,bx[2]+pad)*W,y1=Math.min(1,bx[3]+pad)*H;
+  const pad=.012,x0=Math.max(0,bx[0]-pad)*W,y0=Math.max(0,bx[1]-pad)*H,x1=Math.min(1,bx[2]+pad)*W,y1=Math.min(1,bx[3]+pad)*H;
   const sw=x1-x0,sh=y1-y0,s=Math.min(1,1000/sw),c=document.createElement('canvas');c.width=Math.max(1,Math.round(sw*s));c.height=Math.max(1,Math.round(sh*s));
   c.getContext('2d').drawImage(bmp,x0,y0,sw,sh,0,0,c.width,c.height);out.push(await toBlob(c,'image/jpeg',.82))}
  bmp.close?.();return out}
@@ -439,15 +441,22 @@ function placeNotes(p,list){
 }
 
 // ---------- estrazione con LLM vision ----------
-const PROMPT=`Sei un lettore di roadbook per fuoristrada/rally. La pagina è una griglia di caselle (righe). Ogni casella ha di solito: distanza progressiva in km (il numero più grande, spesso a sinistra), distanza parziale dalla casella precedente (numero più piccolo), un disegno "tulipano" con la direzione da prendere, e note (testo, CAP in gradi, simboli di pericolo ! !! !!!).
-Rispondi SOLO con JSON valido, senza testo prima o dopo, in questo formato:
-{"rows":[{"n":numero casella o null,"km":km progressivi (numero),"partial":km parziali o null,"cap":gradi interi o null,"text":"trascrizione breve in italiano delle note e della manovra del tulipano (es. 'SX su pista bianca', 'DX al bivio, dopo ponte')","danger":0-3,"box":[x0,y0,x1,y1]}]}
-"box" è il riquadro dell'intera casella sulla pagina in coordinate normalizzate 0-1000 (x0,y0 = angolo in alto a sinistra). Ordine di lettura: dall'alto in basso; se la pagina ha più colonne di caselle, prima la colonna di sinistra. Usa il punto decimale. Non inventare caselle; ignora intestazioni e piè di pagina.`;
+const PROMPT=`Sei un lettore di roadbook per fuoristrada/rally. La pagina contiene caselle ("vignette"). Due formati comuni:
+A) stile rally: righe a tutta larghezza con colonne distanza | tulipano | note, spesso con km progressivi e parziali;
+B) semplice: griglia di vignette (es. 3 per riga), ognuna con un piccolo riquadro col numero (es. "061"), una distanza (es. "km. 1,800"), il disegno della manovra e a volte testo o cartelli con nomi di località.
+Nel formato B la distanza nella vignetta è quasi sempre il PARZIALE dalla vignetta precedente: mettila in "partial" e lascia "km" a null. Usa "km" solo per distanze progressive che crescono da una casella all'altra.
+Alcune vignette non hanno numero (n = null) e alcune contengono solo testo senza distanza (partial = null): includile comunque, al loro posto.
+Per ogni casella: n, km, partial, cap (gradi, se indicato), text = breve descrizione in italiano della manovra disegnata (freccia: dritto, destra, sinistra, tornante, al bivio, precedenza, stop) più testo e nomi dei cartelli presenti (es. 'DX al bivio, dare precedenza', 'Dritto, cartello IERONIZA'), danger 0-3 (simboli ! !! !!!, scritte ADAGIO/PERICOLO = almeno 1), box.
+Se a piè di pagina c'è un numero isolato con la somma delle distanze della pagina (es. "12,980"), restituiscilo in "page_total".
+Rispondi SOLO con JSON valido, senza testo prima o dopo:
+{"layout":"righe" o "griglia","page_total":numero o null,"rows":[{"n":numero o null,"km":numero o null,"partial":numero o null,"cap":intero o null,"text":"...","danger":0-3,"box":[x0,y0,x1,y1]}]}
+"box" è il riquadro dell'intera casella in coordinate normalizzate 0-1000 (x0,y0 = angolo in alto a sinistra).
+Ordine: per la griglia leggi riga per riga da sinistra a destra, dall'alto in basso (segue di solito la numerazione); per il formato rally con più colonne di righe, prima tutta la colonna di sinistra. Converti la virgola decimale in punto (1,800 -> 1.8). Non inventare caselle e non unire caselle diverse; ignora intestazioni, avvertenze e numero di pagina.`;
 function parseJSON(t){
  t=String(t||'').replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/```(?:json)?/gi,'');
  const a=t.indexOf('{'),b=t.lastIndexOf('}');
- if(a>=0&&b>a){try{const j=JSON.parse(t.slice(a,b+1));if(Array.isArray(j.rows))return j.rows;for(const v of Object.values(j))if(Array.isArray(v))return v}catch(e){}}
- const c=t.indexOf('['),d=t.lastIndexOf(']');if(c>=0&&d>c){try{return JSON.parse(t.slice(c,d+1))}catch(e){}}
+ if(a>=0&&b>a){try{const j=JSON.parse(t.slice(a,b+1)),total=num(j.page_total);if(Array.isArray(j.rows))return{rows:j.rows,total};for(const v of Object.values(j))if(Array.isArray(v))return{rows:v,total}}catch(e){}}
+ const c=t.indexOf('['),d=t.lastIndexOf(']');if(c>=0&&d>c){try{return{rows:JSON.parse(t.slice(c,d+1)),total:null}}catch(e){}}
  throw new Error('risposta non in JSON')}
 function normBox(b,iw,ih){
  if(!Array.isArray(b)||b.length!==4)return null;const a=b.map(Number);if(a.some(v=>isNaN(v)))return null;
@@ -463,13 +472,17 @@ async function extractPage(p){
   const dataUrl=c.toDataURL('image/jpeg',.85);
   const r=await fetch(S.api.replace(/\/+$/,'')+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',...(S.token?{Authorization:'Bearer '+S.token}:{})},body:JSON.stringify({model:S.model,temperature:0,max_tokens:6000,messages:[{role:'system',content:PROMPT},{role:'user',content:[{type:'text',text:'Estrai tutte le caselle di questa pagina di roadbook.'},{type:'image_url',image_url:{url:dataUrl}}]}]})});
   if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,160));
-  const j=await r.json(),rows=parseJSON(j.choices?.[0]?.message?.content);
+  const j=await r.json(),{rows,total}=parseJSON(j.choices?.[0]?.message?.content);
   if(!rows.length)throw new Error('nessuna casella trovata');
   let boxes=rows.map(x=>normBox(x.box,c.width,c.height));
   if(boxes.filter(Boolean).length<rows.length/2){const k=rows.length;boxes=rows.map((_,i)=>[0,i/k,1,(i+1)/k])}
   const imgs=await cropAll(p.blob,boxes);
-  placeNotes(p,rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]})));
-  p.status='estratta';
+  let list=rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]}));
+  const ns=list.map(x=>x.n).filter(v=>v!=null);
+  if(ns.length>=list.length*.6&&new Set(ns).size===ns.length){let ln=-1e9;list=list.map((x,i)=>{const k=x.n??ln+.5;if(x.n!=null)ln=x.n;else ln=k;return[x,k,i]}).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0])}
+  placeNotes(p,list);fillKm(ed.notes);
+  const sum=list.reduce((t,x)=>t+(x.partial||0),0);
+  p.status='estratta';p.err=list.length+' caselle'+(total!=null?(Math.abs(sum-total)<.006?' · somma '+fmt(sum,3)+' ✓':' · ⚠ somma '+fmt(sum,3)+' ≠ '+fmt(total,3)):'');
  }catch(err){p.status='errore';p.err=err.message.includes('Failed to fetch')?'rete/CORS':err.message}
  renderEd();saveEd();
 }

@@ -1,5 +1,5 @@
 // Cache dell'app (stale-while-revalidate) per funzionare offline in fuoristrada.
-const V = 'roadbook-v1';
+const V = 'roadbook-v2';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener('activate', e => {
