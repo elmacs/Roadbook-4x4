@@ -204,7 +204,7 @@ dialog h3{margin:0 0 10px;font-size:20px}
 </section>
 
 <dialog id="dlg"><form id="dlgF"><h3 id="dlgT"></h3><input id="dlgI"><div class="dlgb"><button type="button" id="dlgNo">Annulla</button><button class="pri" id="dlgOk">OK</button></div></form></dialog>
-<dialog id="jdlg"><h3>Incolla JSON</h3><p class="hint">1. Copia il prompt. 2. Nell'app Gemini allega la foto di questa pagina e incolla il prompt. 3. Copia la risposta e incollala qui.</p><button type="button" id="jCopy" style="width:100%;margin-bottom:8px">Copia prompt</button><textarea id="jTxt" rows="8" placeholder='{"rows":[...]}' spellcheck="false"></textarea><div id="jErr" class="hint" style="color:var(--bad)"></div><div class="dlgb"><button type="button" id="jNo">Annulla</button><button type="button" class="pri" id="jOk">Importa</button></div></dialog>
+<dialog id="jdlg"><h3>Incolla JSON</h3><p class="hint">1. Copia il prompt. 2. Nell'app Gemini allega la foto di questa pagina e incolla il prompt. 3. Copia la risposta e incollala qui.</p><button type="button" id="jCopy" style="width:100%;margin-bottom:8px">Copia prompt</button><textarea id="jTxt" rows="8" placeholder='{"rows":[...]}' spellcheck="false"></textarea><label style="display:flex;gap:10px;align-items:center;margin-top:8px;color:var(--ink)"><input type="checkbox" id="jYx" checked style="width:24px;height:24px"> Risposta da Gemini (box in formato [y, x])</label><div id="jErr" class="hint" style="color:var(--bad)"></div><div class="dlgb"><button type="button" id="jNo">Annulla</button><button type="button" class="pri" id="jOk">Importa</button></div></dialog>
 <dialog id="menu"><h3>Menu</h3><div class="mg">
  <button data-m="books">Roadbook…</button>
  <button data-m="map">Mappa e tracce</button>
@@ -452,24 +452,27 @@ Alcune vignette non hanno numero (n = null) e alcune contengono solo testo senza
 Per ogni casella: n, km, partial, cap (gradi, se indicato), text = breve descrizione in italiano della manovra disegnata (freccia: dritto, destra, sinistra, tornante, al bivio, precedenza, stop) più testo e nomi dei cartelli presenti (es. 'DX al bivio, dare precedenza', 'Dritto, cartello IERONIZA'), danger 0-3 (simboli ! !! !!!, scritte ADAGIO/PERICOLO = almeno 1), box.
 Se a piè di pagina c'è un numero isolato con la somma delle distanze della pagina (es. "12,980"), restituiscilo in "page_total".
 Rispondi SOLO con JSON valido, senza testo prima o dopo:
-{"layout":"righe" o "griglia","page_total":numero o null,"rows":[{"n":numero o null,"km":numero o null,"partial":numero o null,"cap":intero o null,"text":"...","danger":0-3,"box":[x0,y0,x1,y1]}]}
-"box" è il riquadro dell'intera casella in coordinate normalizzate 0-1000 (x0,y0 = angolo in alto a sinistra).
-Ordine: per la griglia leggi riga per riga da sinistra a destra, dall'alto in basso (segue di solito la numerazione); per il formato rally con più colonne di righe, prima tutta la colonna di sinistra. Converti la virgola decimale in punto (1,800 -> 1.8). Non inventare caselle e non unire caselle diverse; ignora intestazioni, avvertenze e numero di pagina.`;
+{"layout":"righe" o "griglia","page_total":numero o null,"rows":[{"n":numero o null,"km":numero o null,"partial":numero o null,"cap":intero o null,"text":"...","danger":0-3,"box":{"top":0-1000,"left":0-1000,"bottom":0-1000,"right":0-1000}}]}
+"box" è il riquadro dell'intera casella misurato sulla foto, in coordinate normalizzate 0-1000 (top/bottom in verticale dall'alto, left/right in orizzontale da sinistra). Non dividere la pagina in parti uguali: segui i bordi reali delle caselle.
+Ordine: per la griglia leggi riga per riga da sinistra a destra, dall'alto in basso (segue di solito la numerazione); per il formato rally con più colonne di righe, prima tutta la colonna di sinistra. Converti la virgola decimale in punto (1,800 -> 1.8). Non inventare caselle, non unire caselle diverse e non includere caselle vuote; ignora intestazioni, avvertenze e numero di pagina.`;
 function parseJSON(t){
  t=String(t||'').replace(/<think>[\s\S]*?<\/think>/gi,'').replace(/```(?:json)?/gi,'');
  const a=t.indexOf('{'),b=t.lastIndexOf('}');
  if(a>=0&&b>a){try{const j=JSON.parse(t.slice(a,b+1)),total=num(j.page_total);if(Array.isArray(j.rows))return{rows:j.rows,total};for(const v of Object.values(j))if(Array.isArray(v))return{rows:v,total}}catch(e){}}
  const c=t.indexOf('['),d=t.lastIndexOf(']');if(c>=0&&d>c){try{return{rows:JSON.parse(t.slice(c,d+1)),total:null}}catch(e){}}
  throw new Error('risposta non in JSON')}
-function normBox(b,iw,ih){
+function normBox(b,iw,ih,yx){
+ if(b&&!Array.isArray(b)&&typeof b==='object'){const g=k=>b[k];b=[g('left')??g('x0')??g('xmin'),g('top')??g('y0')??g('ymin'),g('right')??g('x1')??g('xmax'),g('bottom')??g('y1')??g('ymax')]}
+ else if(Array.isArray(b)&&b.length===4&&yx)b=[b[1],b[0],b[3],b[2]];
  if(!Array.isArray(b)||b.length!==4)return null;const a=b.map(Number);if(a.some(v=>isNaN(v)))return null;
  const mx=Math.max(...a);const sx=mx<=1.001?1:mx<=1000.5?1000:iw,sy=mx<=1.001?1:mx<=1000.5?1000:ih;
  let[x0,y0,x1,y1]=[a[0]/sx,a[1]/sy,a[2]/sx,a[3]/sy];if(x1<x0)[x0,x1]=[x1,x0];if(y1<y0)[y0,y1]=[y1,y0];
  const cl=v=>Math.max(0,Math.min(1,v));[x0,y0,x1,y1]=[cl(x0),cl(y0),cl(x1),cl(y1)];
  return(x1-x0<.05||y1-y0<.015)?null:[x0,y0,x1,y1]}
-async function applyRows(p,rows,total,iw,ih){
+async function applyRows(p,rows,total,iw,ih,yx){
+ rows=rows.filter(x=>x&&(num(x.km)!=null||num(x.partial)!=null||(String(x.text??'').trim()&&!/^(casella\s+)?vuota\.?$|^empty$|^vuoto$/i.test(String(x.text).trim()))));
  if(!rows.length)throw new Error('nessuna casella trovata');
-  let boxes=rows.map(x=>normBox(x.box,iw,ih));
+  let boxes=rows.map(x=>normBox(x.box,iw,ih,yx));
   if(boxes.filter(Boolean).length<rows.length/2){const k=rows.length;boxes=rows.map((_,i)=>[0,i/k,1,(i+1)/k])}
   const imgs=await cropAll(p.blob,boxes);
   let list=rows.map((x,i)=>({n:num(x.n),km:num(x.km),partial:num(x.partial),cap:num(x.cap),text:String(x.text??'').slice(0,300),danger:Math.max(0,Math.min(3,Math.round(num(x.danger)||0))),img:imgs[i]}));
@@ -477,13 +480,13 @@ async function applyRows(p,rows,total,iw,ih){
   if(ns.length>=list.length*.6&&new Set(ns).size===ns.length){let ln=-1e9;list=list.map((x,i)=>{const k=x.n??ln+.5;if(x.n!=null)ln=x.n;else ln=k;return[x,k,i]}).sort((a,b)=>a[1]-b[1]||a[2]-b[2]).map(a=>a[0])}
   placeNotes(p,list);fillKm(ed.notes);
   const sum=list.reduce((t,x)=>t+(x.partial||0),0);
-  p.status='estratta';p.err=list.length+' caselle'+(total!=null?(Math.abs(sum-total)<.006?' · somma '+fmt(sum,3)+' ✓':' · ⚠ somma '+fmt(sum,3)+' ≠ '+fmt(total,3)):'');
+  p.status='estratta';p.err=list.length+' caselle'+(total!=null?(Math.abs(sum-total)<.006?' · somma '+fmt(sum,3)+' ✓':' · ⚠ somma '+fmt(sum,3)+' ≠ '+fmt(total,3)):'');return list.length;
 }
 async function importJson(p){
  const d=$('#jdlg'),t=$('#jTxt');t.value='';$('#jErr').textContent='';d.showModal();
  $('#jCopy').onclick=async()=>{try{await navigator.clipboard.writeText(PROMPT);toast('Prompt copiato: incollalo in Gemini insieme alla foto')}catch(e){t.value=PROMPT;t.select();toast('Copia il prompt dal riquadro')}};
  $('#jNo').onclick=()=>d.close();
- $('#jOk').onclick=async()=>{try{const {rows,total}=parseJSON(t.value);const bmp=await createImageBitmap(p.blob);const w=bmp.width,h=bmp.height;bmp.close?.();await applyRows(p,rows,total,w,h);d.close();renderEd();saveEd();toast('Importate '+rows.length+' caselle')}catch(e){$('#jErr').textContent='Errore: '+e.message}};
+ $('#jOk').onclick=async()=>{try{const {rows,total}=parseJSON(t.value);const bmp=await createImageBitmap(p.blob);const w=bmp.width,h=bmp.height;bmp.close?.();const k=await applyRows(p,rows,total,w,h,$('#jYx').checked);d.close();renderEd();saveEd();toast('Importate '+k+' caselle')}catch(e){$('#jErr').textContent='Errore: '+e.message}};
 }
 async function extractPage(p){
  if(!S.api||!S.model){toast('Configura URL e modello nelle Impostazioni');openSet();return}
@@ -495,7 +498,7 @@ async function extractPage(p){
   if(!r.ok)throw new Error('HTTP '+r.status+' '+(await r.text()).slice(0,160));
   const j=await r.json(),{rows,total}=parseJSON(j.choices?.[0]?.message?.content);
   if(!rows.length)throw new Error('nessuna casella trovata');
-  await applyRows(p,rows,total,c.width,c.height);
+  await applyRows(p,rows,total,c.width,c.height,/gemini/i.test(S.model));
  }catch(err){p.status='errore';p.err=err.message.includes('Failed to fetch')?'rete/CORS':err.message}
  renderEd();saveEd();
 }
